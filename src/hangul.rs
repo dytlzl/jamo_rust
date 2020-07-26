@@ -226,7 +226,7 @@ impl KoreanSentence {
         self.payload.iter().map(|l| l.hangul_string()).collect::<Vec<String>>().join("")
     }
 
-    /// Returns a new instance applied the rules.
+    /// Returns a KoreanSentence applied the rules.
     ///
     /// # Examples
     ///
