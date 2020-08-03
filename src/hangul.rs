@@ -144,13 +144,6 @@ impl Letter {
         }
         false
     }
-    pub fn mut_hangul(&mut self) -> Option<&mut Hangul> {
-        if let Self::HangulLetter(l) = self {
-            return Some(l);
-        } else {
-            None
-        }
-    }
 }
 
 struct Rule {
@@ -206,11 +199,11 @@ impl KoreanSentence {
             payload: s.chars().map(
                 |c| Letter::new(c)
             ).collect::<Vec<Letter>>(),
-            context: JamoContext{
-                lead_rev_dict:  reverse_dict(&LEAD_DICT[..]),
+            context: JamoContext {
+                lead_rev_dict: reverse_dict(&LEAD_DICT[..]),
                 vowel_rev_dict: reverse_dict(&VOWEL_DICT[..]),
                 tail_rev_dict: reverse_dict(&TAIL_DICT[..]),
-            }
+            },
         }
     }
 
@@ -233,25 +226,44 @@ impl KoreanSentence {
     /// ```
     /// use jamo::hangul::KoreanSentence;
     /// let sentence = KoreanSentence::new("좋아요.");
-    /// let new_sentence = sentence.apply_rules();
+    /// let new_sentence = sentence.applied();
     /// assert_eq!("조아요.", new_sentence.hangul_string());
     /// ```
-    pub fn apply_rules(&self) -> Self {
-        let mut p: Vec<Letter> = self.payload.iter().map(|l| { l.clone() }).collect();
-        (0..(p.len() - 1))
-            .for_each(|i| {
-                if p[i].is_hangul() && p[i + 1].is_hangul() {
-                    RULES.iter().for_each(|r| {
-                        let tail = p[i].mut_hangul().unwrap().tail().roman();
-                        let lead = p[i + 1].mut_hangul().unwrap().lead().roman();
-                        if (r.tail == "*" || tail == r.tail) && (r.lead == "*" || lead == r.lead) {
-                            let (new_tail, new_lead) = (r.strategy)(tail, lead);
-                            p[i].mut_hangul().unwrap().tail.usize = self.context.tail_rev_dict[new_tail];
-                            p[i + 1].mut_hangul().unwrap().lead.usize = self.context.lead_rev_dict[new_lead];
-                        }
-                    })
+    pub fn applied(&self) -> Self {
+        Self { payload: self.applied_vec(self.payload[0].clone(), self.payload[1].clone(), &self.payload[2..]), context: self.context.clone() }
+    }
+    fn applied_vec(&self, a: Letter, b: Letter, rest: &[Letter]) -> Vec<Letter> {
+        let (_a, _b) = self.apply_rules(a, b, &RULES[..]);
+        if rest.len() == 0 {
+            return vec![_a, _b]
+        }
+        [vec![_a], self.applied_vec(_b, rest[0].clone(), &rest[1..])].concat()
+    }
+    fn apply_rules(&self, a: Letter, b: Letter, rules: &[Rule]) -> (Letter, Letter) {
+        if rules.len() == 0 {
+            return (a, b)
+        }
+        if let Letter::HangulLetter(_a) = &a {
+            if let Letter::HangulLetter(_b) = &b {
+                let tail = _a.tail().roman();
+                let lead = _b.lead().roman();
+                if (rules[0].tail == "*" || tail == rules[0].tail) && (rules[0].lead == "*" || lead == rules[0].lead) {
+                    let (new_tail, new_lead) = (rules[0].strategy)(tail, lead);
+                    return self.apply_rules(
+                        Letter::HangulLetter(
+                            Hangul {
+                                lead: _a.lead.clone(),
+                                vowel: _a.vowel.clone(),
+                                tail: Jamo { usize: self.context.tail_rev_dict[new_tail], position: JamoPosition::Tail } }),
+                        Letter::HangulLetter(
+                            Hangul {
+                                lead: Jamo { usize: self.context.lead_rev_dict[new_lead], position: JamoPosition::Lead },
+                                vowel: _b.vowel.clone(),
+                                tail: _b.tail.clone() }),
+                        &rules[1..]);
                 }
-            });
-        Self { payload: p, context: self.context.clone() }
+            }
+        }
+        self.apply_rules(a, b, &rules[1..])
     }
 }
