@@ -230,38 +230,51 @@ impl KoreanSentence {
     /// assert_eq!("조아요.", new_sentence.hangul_string());
     /// ```
     pub fn applied(&self) -> Self {
-        Self { payload: self.applied_vec(self.payload[0].clone(), self.payload[1].clone(), &self.payload[2..]), context: self.context.clone() }
+        Self {
+            payload: self.applied_vec(
+                self.payload[0].clone(),
+                self.payload[1].clone(),
+                &self.payload[2..]),
+            context: self.context.clone(),
+        }
     }
     fn applied_vec(&self, a: Letter, b: Letter, rest: &[Letter]) -> Vec<Letter> {
         let (_a, _b) = self.apply_rules(a, b, &RULES[..]);
         if rest.len() == 0 {
-            return vec![_a, _b]
+            return vec![_a, _b];
         }
         [vec![_a], self.applied_vec(_b, rest[0].clone(), &rest[1..])].concat()
     }
     fn apply_rules(&self, a: Letter, b: Letter, rules: &[Rule]) -> (Letter, Letter) {
         if rules.len() == 0 {
-            return (a, b)
+            return (a, b);
         }
-        if let Letter::HangulLetter(_a) = &a {
-            if let Letter::HangulLetter(_b) = &b {
-                let tail = _a.tail().roman();
-                let lead = _b.lead().roman();
-                if (rules[0].tail == "*" || tail == rules[0].tail) && (rules[0].lead == "*" || lead == rules[0].lead) {
-                    let (new_tail, new_lead) = (rules[0].strategy)(tail, lead);
-                    return self.apply_rules(
-                        Letter::HangulLetter(
-                            Hangul {
-                                lead: _a.lead.clone(),
-                                vowel: _a.vowel.clone(),
-                                tail: Jamo { usize: self.context.tail_rev_dict[new_tail], position: JamoPosition::Tail } }),
-                        Letter::HangulLetter(
-                            Hangul {
-                                lead: Jamo { usize: self.context.lead_rev_dict[new_lead], position: JamoPosition::Lead },
-                                vowel: _b.vowel.clone(),
-                                tail: _b.tail.clone() }),
-                        &rules[1..]);
-                }
+        if let (Letter::HangulLetter(_a), Letter::HangulLetter(_b)) = (&a, &b) {
+            let tail = _a.tail().roman();
+            let lead = _b.lead().roman();
+            if (rules[0].tail == "*" || tail == rules[0].tail) &&
+                (rules[0].lead == "*" || lead == rules[0].lead) {
+                let (new_tail, new_lead) = (rules[0].strategy)(tail, lead);
+                return self.apply_rules(
+                    Letter::HangulLetter(
+                        Hangul {
+                            lead: _a.lead.clone(),
+                            vowel: _a.vowel.clone(),
+                            tail: Jamo {
+                                usize: self.context.tail_rev_dict[new_tail],
+                                position: JamoPosition::Tail,
+                            },
+                        }),
+                    Letter::HangulLetter(
+                        Hangul {
+                            lead: Jamo {
+                                usize: self.context.lead_rev_dict[new_lead],
+                                position: JamoPosition::Lead,
+                            },
+                            vowel: _b.vowel.clone(),
+                            tail: _b.tail.clone(),
+                        }),
+                    &rules[1..]);
             }
         }
         self.apply_rules(a, b, &rules[1..])
